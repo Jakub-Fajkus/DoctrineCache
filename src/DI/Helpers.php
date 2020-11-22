@@ -59,7 +59,12 @@ class Helpers
 	{
 		$builder = $extension->getContainerBuilder();
 
-		$impl = $cache instanceof stdClass ? $cache->value : ($cache instanceof \Nette\DI\Definitions\Statement ? $cache->getEntity() : $cache);
+		if (\class_exists(\Nette\DI\Definitions\Statement::class)) {
+			$impl = $cache instanceof stdClass ? $cache->value : ($cache instanceof \Nette\DI\Definitions\Statement ? $cache->getEntity() : $cache);
+		} else {
+			$impl = ($cache instanceof stdClass) ? $cache->value : (($cache instanceof \Nette\DI\Statement) ? $cache->getEntity() : $cache);
+		}
+
 		if (!is_string($impl)) {
 			throw new \InvalidArgumentException('Cache implementation cannot be resolved. Pass preferably string or \Nette\DI\Definitions\Statement as $cache argument.');
 		}
@@ -67,7 +72,11 @@ class Helpers
 		/** @var \Nette\DI\Definitions\Statement $cache */
 		[$cache] = self::filterArgs($cache);
 		if (isset(self::$cacheDriverClasses[$impl])) {
-			$cache = new \Nette\DI\Definitions\Statement(self::$cacheDriverClasses[$impl], $cache->arguments);
+			if (\class_exists(\Nette\DI\Definitions\Statement::class)) {
+				$cache = new \Nette\DI\Definitions\Statement(self::$cacheDriverClasses[$impl], $cache->arguments);
+			} else {
+				$cache = new \Nette\DI\Statement(self::$cacheDriverClasses[$impl], $cache->arguments);
+			}
 		}
 
 		if ($impl === 'default') {
@@ -103,7 +112,13 @@ class Helpers
 	 */
 	public static function filterArgs($statement): array
 	{
-		return self::doFilterArguments([is_string($statement) ? new \Nette\DI\Definitions\Statement($statement) : $statement]);
+		if (\class_exists(\Nette\DI\Definitions\Statement::class)) {
+			return self::doFilterArguments(
+				[is_string($statement) ? new \Nette\DI\Definitions\Statement($statement) : $statement]
+			);
+		} else {
+			return self::doFilterArguments([is_string($statement) ? new \Nette\DI\Statement($statement) : $statement]);
+		}
 	}
 
 	/**
@@ -121,13 +136,22 @@ class Helpers
 			} elseif (is_array($v)) {
 				$args[$k] = self::doFilterArguments($v);
 
-			} elseif ($v instanceof \Nette\DI\Definitions\Statement) {
+			} elseif (\class_exists(\Nette\DI\Definitions\Statement::class) && $v instanceof \Nette\DI\Definitions\Statement) {
 				$tmp = self::doFilterArguments([$v->getEntity()]);
 				$args[$k] = new \Nette\DI\Definitions\Statement($tmp[0], self::doFilterArguments($v->arguments));
 
+			} elseif (\class_exists(\Nette\DI\Statement::class) && $v instanceof \Nette\DI\Statement) {
+				$tmp = self::doFilterArguments([$v->getEntity()]);
+				$args[$k] = new \Nette\DI\Statement($tmp[0], self::doFilterArguments($v->arguments));
+
 			} elseif ($v instanceof stdClass && isset($v->value, $v->attributes)) {
 				$tmp = self::doFilterArguments([$v->value]);
-				$args[$k] = new \Nette\DI\Definitions\Statement($tmp[0], self::doFilterArguments(is_array($v->attributes) ? $v->attributes : [$v->attributes]));
+
+				if (\class_exists(\Nette\DI\Definitions\Statement::class)) {
+					$args[$k] = new \Nette\DI\Definitions\Statement($tmp[0], self::doFilterArguments(is_array($v->attributes) ? $v->attributes : [$v->attributes]));
+				} else {
+					$args[$k] = new \Nette\DI\Statement($tmp[0], self::doFilterArguments(is_array($v->attributes) ? $v->attributes : [$v->attributes]));
+				}
 			}
 		}
 
